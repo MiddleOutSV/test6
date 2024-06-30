@@ -1,8 +1,10 @@
 import streamlit as st
 import requests
-from bs4 import BeautifulSoup
 from datetime import datetime, timedelta
 from googletrans import Translator
+
+# finnhub API 키 설정
+FINNHUB_API_KEY = st.secrets["finnhub"]["api_key"]
 
 # 번역기 초기화
 translator = Translator()
@@ -11,26 +13,21 @@ def get_news(ticker, days):
     end_date = datetime.now()
     start_date = end_date - timedelta(days=days)
     
-    url = f"https://www.marketwatch.com/investing/stock/{ticker}"
-    
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+    url = f"https://finnhub.io/api/v1/company-news"
+    params = {
+        'symbol': ticker,
+        'from': start_date.strftime('%Y-%m-%d'),
+        'to': end_date.strftime('%Y-%m-%d'),
+        'token': FINNHUB_API_KEY
     }
     
     try:
-        response = requests.get(url, headers=headers)
+        response = requests.get(url, params=params)
         response.raise_for_status()
-        soup = BeautifulSoup(response.content, 'html.parser')
+        news = response.json()
         
-        news_items = soup.find_all('div', class_='article__content')
-        
-        filtered_news = []
-        for item in news_items[:5]:  # 최대 5개의 뉴스 항목만 가져옵니다
-            title = item.find('a', class_='link').text.strip()
-            summary = item.find('p', class_='article__summary').text.strip()
-            filtered_news.append({"title": title, "summary": summary})
-        
-        return filtered_news
+        # 최대 5개의 뉴스 항목만 반환
+        return news[:5]
     except requests.RequestException as e:
         st.error(f"뉴스를 가져오는 중 오류가 발생했습니다: {str(e)}")
         return []
@@ -38,7 +35,7 @@ def get_news(ticker, days):
 def summarize_news(articles):
     summaries = []
     for article in articles:
-        title = article['title']
+        title = article['headline']
         summary = article['summary']
         full_summary = f"{title}\n{summary}"
         summaries.append(full_summary)
@@ -68,6 +65,6 @@ if st.button('뉴스 가져오기'):
                 translated_summary = translate_to_korean(summary)
             st.write(translated_summary)
         else:
-            st.warning('뉴스를 찾을 수 없습니다. 다른 티커를 입력해 보세요.')
+            st.warning('선택한 기간 동안 뉴스를 찾을 수 없습니다. 다른 기간을 선택하거나 다른 티커를 입력해 보세요.')
     else:
         st.warning('티커를 입력해주세요.')
