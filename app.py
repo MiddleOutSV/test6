@@ -1,5 +1,5 @@
 import streamlit as st
-import feedparser
+import yfinance as yf
 from datetime import datetime, timedelta
 from googletrans import Translator
 
@@ -10,20 +10,22 @@ def get_news(ticker, days):
     end_date = datetime.now()
     start_date = end_date - timedelta(days=days)
     
-    # Google News RSS 피드 URL
-    url = f"https://news.google.com/rss/search?q={ticker}+when:{start_date.strftime('%Y-%m-%d')}:{end_date.strftime('%Y-%m-%d')}&hl=en-US&gl=US&ceid=US:en"
+    # Yahoo Finance API를 통해 뉴스 가져오기
+    stock = yf.Ticker(ticker)
+    news = stock.news
     
-    # RSS 피드 파싱
-    feed = feedparser.parse(url)
-    
-    # 최대 5개의 뉴스 항목 반환
-    return feed.entries[:5]
+    # 날짜 필터링 및 최대 5개 뉴스 항목 반환
+    filtered_news = [
+        item for item in news 
+        if start_date.timestamp() <= item['providerPublishTime'] <= end_date.timestamp()
+    ]
+    return filtered_news[:5]
 
 def summarize_news(articles):
     summaries = []
     for article in articles:
-        title = article.title
-        summary = article.summary
+        title = article['title']
+        summary = article.get('summary', '')
         full_summary = f"{title}\n{summary}"
         summaries.append(full_summary)
     return "\n\n".join(summaries)
