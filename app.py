@@ -1,5 +1,5 @@
 import streamlit as st
-import yfinance as yf
+import requests
 from datetime import datetime, timedelta
 from googletrans import Translator
 
@@ -10,16 +10,28 @@ def get_news(ticker, days):
     end_date = datetime.now()
     start_date = end_date - timedelta(days=days)
     
-    # Yahoo Finance API를 통해 뉴스 가져오기
-    stock = yf.Ticker(ticker)
-    news = stock.news
+    # Yahoo Finance API 엔드포인트
+    url = f"https://query1.finance.yahoo.com/v1/finance/search?q={ticker}&newsCount=5&quotesCount=0&enableFuzzyQuery=false&quotesQueryId=tss_match_phrase_query&multiQuoteQueryId=multi_quote_single_token_query&enableCb=true&enableNavLinks=true&enableEnhancedTrivialQuery=true"
     
-    # 날짜 필터링 및 최대 5개 뉴스 항목 반환
-    filtered_news = [
-        item for item in news 
-        if start_date.timestamp() <= item['providerPublishTime'] <= end_date.timestamp()
-    ]
-    return filtered_news[:5]
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+    }
+    
+    try:
+        response = requests.get(url, headers=headers)
+        response.raise_for_status()  # Raise an exception for bad status codes
+        data = response.json()
+        news = data.get('news', [])
+        
+        # 날짜 필터링
+        filtered_news = [
+            item for item in news 
+            if start_date.timestamp() <= item['providerPublishTime'] <= end_date.timestamp()
+        ]
+        return filtered_news
+    except requests.RequestException as e:
+        st.error(f"뉴스를 가져오는 중 오류가 발생했습니다: {str(e)}")
+        return []
 
 def summarize_news(articles):
     summaries = []
@@ -31,7 +43,11 @@ def summarize_news(articles):
     return "\n\n".join(summaries)
 
 def translate_to_korean(text):
-    return translator.translate(text, dest='ko').text
+    try:
+        return translator.translate(text, dest='ko').text
+    except Exception as e:
+        st.error(f"번역 중 오류가 발생했습니다: {str(e)}")
+        return text
 
 # Streamlit 앱
 st.title('주식 뉴스 요약 앱')
@@ -42,12 +58,14 @@ period = st.selectbox('기간 선택', ['1일', '1주일', '1달'])
 if st.button('뉴스 가져오기'):
     if ticker:
         days = {'1일': 1, '1주일': 7, '1달': 30}[period]
-        news = get_news(ticker, days)
+        with st.spinner('뉴스를 가져오는 중...'):
+            news = get_news(ticker, days)
         if news:
             summary = summarize_news(news)
-            translated_summary = translate_to_korean(summary)
+            with st.spinner('뉴스를 번역하는 중...'):
+                translated_summary = translate_to_korean(summary)
             st.write(translated_summary)
         else:
-            st.write('뉴스를 찾을 수 없습니다.')
+            st.warning('선택한 기간 동안 뉴스를 찾을 수 없습니다. 다른 기간을 선택하거나 다른 티커를 입력해 보세요.')
     else:
-        st.write('티커를 입력해주세요.')
+        st.warning('티커를 입력해주세요.')
